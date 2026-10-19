@@ -1,0 +1,15 @@
+{
+  "name": "gearbox-for-immich",
+  "version": "1.0.0",
+  "description": "A shelf of every camera body and lens in your Immich library.",
+  "type": "module",
+  "license": "GPL-3.0-or-later",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server.mjs",
+    "dev:mock": "node dev/mock-immich.mjs",
+    "dev": "node --watch server.mjs"
+  }
+}

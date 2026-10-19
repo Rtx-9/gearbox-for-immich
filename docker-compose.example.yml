@@ -1,0 +1,21 @@
+# Add this service to the docker-compose.yml you already use for Immich
+# (put the gearbox/ folder next to it).
+#
+# Using Folio too? Leave Folio in front and point it at Gearbox:
+#   folio → environment → IMMICH_URL: http://immich_gearbox:2285
+# Not using Folio? Open port 2285 instead of 2283, or point your domain /
+# reverse proxy at immich_gearbox:2285. Gearbox forwards everything else to Immich.
+
+services:
+  gearbox:
+    container_name: immich_gearbox
+    build: ./gearbox
+    environment:
+      IMMICH_URL: http://immich-server:2283
+    volumes:
+      - ./gearbox-data:/data
+    ports:
+      - '2285:2285'
+    depends_on:
+      - immich-server
+    restart: always

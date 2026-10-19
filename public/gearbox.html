@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Gearbox</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect x='3' y='9' width='26' height='18' rx='4' fill='%234250af'/><rect x='11' y='5' width='10' height='6' rx='2' fill='%234250af'/><circle cx='16' cy='18' r='5.5' fill='white'/><circle cx='16' cy='18' r='3' fill='%234250af'/></svg>">
+  <link rel="stylesheet" href="/_gearbox/style.css?v=__V__">
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><rect x="3" y="9" width="26" height="18" rx="4"/><rect x="11" y="5" width="10" height="6" rx="2"/><circle cx="16" cy="18" r="5.5" class="hole"/><circle cx="16" cy="18" r="3"/></svg>
+      <div>
+        <h1>Gearbox</h1>
+        <p id="summary" class="muted">Reading your library…</p>
+      </div>
+    </div>
+    <div class="controls">
+      <a class="ghost back" href="/photos">← Immich</a>
+      <input id="filter" type="search" placeholder="Filter gear…" aria-label="Filter gear">
+      <select id="sort" aria-label="Sort">
+        <option value="count">Most used</option>
+        <option value="name">A–Z</option>
+      </select>
+      <button id="refresh" class="ghost" title="Rescan Immich">Rescan</button>
+    </div>
+  </header>
+
+  <main>
+    <p id="error" class="error" hidden></p>
+    <section>
+      <h2>Bodies <span id="bodyCount" class="muted"></span></h2>
+      <div id="bodies" class="grid"></div>
+    </section>
+    <section>
+      <h2>Lenses <span id="lensCount" class="muted"></span></h2>
+      <div id="lenses" class="grid"></div>
+    </section>
+  </main>
+
+  <dialog id="detail">
+    <div class="detail">
+      <button class="close ghost" aria-label="Close" data-close>✕</button>
+      <div class="detail-head">
+        <div class="cover big" id="dCover"></div>
+        <div class="detail-info">
+          <p class="kind muted" id="dKind"></p>
+          <h2 id="dName"></h2>
+          <p id="dCount" class="muted"></p>
+          <p id="dSource" class="muted small"></p>
+          <div class="actions">
+            <a id="dSearch" class="btn" target="_blank" rel="noopener">Open in Immich</a>
+            <button id="dAlbum" class="btn">Make Immich album</button>
+            <button id="dPick" class="ghost">Change picture</button>
+            <button id="dRetry" class="ghost">Search again</button>
+            <button id="dQuestion" class="ghost">Use “?”</button>
+          </div>
+        </div>
+      </div>
+      <div id="dPhotos" class="photos"></div>
+      <button id="dMore" class="ghost more" hidden>Load more</button>
+    </div>
+  </dialog>
+
+  <script src="/_gearbox/app.js?v=__V__"></script>
+</body>
+</html>
