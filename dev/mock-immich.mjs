@@ -13,9 +13,14 @@ const KIT = [
   [{ make: 'Canon', model: 'Canon EOS 5D Mark III' }, ['EF50mm f/1.8 STM', 'EF24-70mm f/2.8L II USM'], 230],
   [{ make: 'SONY', model: 'ILCE-7M3' }, ['FE 24-70mm F2.8 GM', '----'], 140],
   [{ make: 'FUJIFILM', model: 'X-T3' }, ['XF18-55mmF2.8-4 R LM OIS', null], 95],
-  [{ make: 'Apple', model: 'iPhone 13' }, ['iPhone 13 back dual wide camera 5.1mm f/1.6'], 260],
+  [{ make: 'Apple', model: 'iPhone 14' }, ['iPhone 14 back dual wide camera 5.7mm f/1.5', 'iPhone 14 front camera 2.69mm f/1.9'], 260],
+  [{ make: 'Xiaomi', model: '21081111RG' }, [null], 120],
+  [{ make: 'samsung', model: 'SM-G991B' }, [null], 80],
+  [{ make: 'DJI', model: 'FC7303' }, ['24.0 mm f/2.8'], 60],
+  [{ make: 'Canon', model: 'Canon PowerShot SX70 HS' }, ['3.8-247.0 mm'], 50],
+  [{ make: 'SONY', model: 'DSC-RX100M7' }, ['24-200mm F2.8-4.5'], 45],
   [{ make: 'RICOH IMAGING COMPANY, LTD.', model: 'PENTAX K-1' }, ['0.0 mm f/0.0'], 40],
-  [{ make: 'Hasselblad', model: 'Hasselblad 500C/M' }, [null], 3],
+  [{ make: 'MINOLTA', model: 'MINOLTA' }, ['MINOLTA'], 12],
   [{}, [null], 30],
 ];
 

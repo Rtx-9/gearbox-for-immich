@@ -78,8 +78,9 @@ function card(gear) {
   btn.querySelector('.name').title = gear.name;
   btn.querySelector('.count').textContent = gear.count.toLocaleString();
   const sub = gear.unknown
-    ? (gear.kind === 'lens' ? 'no lens info (0.0mm f/0 and friends)' : 'no camera info')
-    : gear.kind === 'lens' && gear.brand && !gear.name.toLowerCase().includes(gear.brand.toLowerCase()) ? `on ${gear.brand} bodies` : '';
+    ? (gear.kind === 'lens' ? 'no lens info (0.0mm f/0 and friends)' : 'no camera info, or just a brand')
+    : gear.kind === 'body' ? [gear.code, gear.typeLabel].filter(Boolean).join(' · ')
+    : gear.brand && !gear.name.toLowerCase().includes(gear.brand.toLowerCase()) ? `on ${gear.brand} bodies` : '';
   btn.querySelector('.sub').textContent = sub;
   btn.querySelector('.sub').hidden = !sub;
   btn.addEventListener('click', () => openDetail(gear));
@@ -132,9 +133,14 @@ async function load(refresh = false) {
 // ───────── detail view ─────────
 
 function fillDetail(gear) {
-  $('#dKind').textContent = gear.kind === 'body' ? 'Camera body' : 'Lens';
+  const KIND = { phone: 'Phone', drone: 'Drone', action: 'Action camera', compact: 'Compact camera' };
+  $('#dKind').textContent = gear.kind === 'lens' ? 'Lens' : KIND[gear.type] || 'Camera body';
   $('#dName').textContent = gear.name;
-  $('#dCount').textContent = plural(gear.count, 'photo') + (gear.brand && gear.kind === 'lens' ? ` · used on ${gear.brand}` : '');
+  $('#dCount').textContent = plural(gear.count, 'photo')
+    + (gear.code ? ` · model ${gear.code}` : '')
+    + (gear.brand && gear.kind === 'lens' ? ` · used on ${gear.brand}` : '');
+  $('#dBuiltin').textContent = gear.builtin?.length ? `Built-in lens: ${gear.builtin.join(', ')}` : '';
+  $('#dBuiltin').hidden = !gear.builtin?.length;
   paintCover($('#dCover'), gear);
   $('#dCover').dataset.cover = gear.id;
 

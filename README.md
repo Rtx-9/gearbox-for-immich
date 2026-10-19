@@ -4,11 +4,17 @@ A gear shelf for your Immich library: every **camera body** and **lens** you've 
 as album-style cards with a product picture and a photo count, most used first.
 
 - Reads EXIF (make / model / lens) from your Immich library.
-- Finds a picture of each body and lens on **Wikipedia** and **Wikimedia Commons**
-  (exact article first, e.g. `Sony ILCE-7M3` → *Sony α7 III*; then a search whose result
-  must contain the model number, so a D3 never gets a D300's picture).
-- Gear with no info — `0.0 mm f/0.0`, `----`, empty lens fields, photos without a camera —
-  gets a big **?**. So does anything it can't find a picture for.
+- Product pictures come from:
+  - **[Apotelyt](https://apotelyt.com)** — clean product shots of ~600 camera bodies and ~1,200 lenses
+  - **[GSMArena](https://www.gsmarena.com)** — phones
+  - **Wikipedia** — everything else (drones, superzooms…), only when the article really is about that model
+- Phone model codes become real names using Google Play's device list:
+  `21081111RG` → **Xiaomi 11T**, `SM-G991B` → **Samsung Galaxy S21 5G**. DJI drone codes too
+  (`FC7303` → **DJI Mini 2**).
+- Phones, drones, action cams and compacts keep their lens on the camera's card
+  ("Built-in lens: iPhone 14 back dual wide camera 5.7mm f/1.5") instead of filling the lens shelf.
+- Gear with no info — `0.0 mm f/0.0`, `----`, empty fields, or just a brand like `MINOLTA` —
+  goes under **Unknown** with a big **?**. So does anything it can't find a picture for.
 - Click a card to see its photos, open them in Immich, swap the picture (paste any link,
   or force the ?), or **make a real Immich album** of everything shot with it.
 
@@ -30,7 +36,11 @@ browser ──► (Folio :2284) ──► Gearbox :2285 ──► Immich :2283
 
 Because it's on the same domain as Immich, the browser's Immich session is all it needs —
 no API key. Each person sees their own library. Found pictures are shared and remembered in
-`/data/covers.json`, so Wikimedia is only asked once per item.
+`/data/covers.json`. The picture and device-name indexes (~20 MB) are downloaded to
+`/data/indexes` on first start and refreshed every two weeks, so each site is only asked a
+handful of times.
+
+DPReview would be the obvious picture source, but it blocks automated requests, so it isn't used.
 
 Folio and Gearbox chain: Folio's `IMMICH_URL` points at Gearbox, Gearbox's points at Immich,
 and both add their link to the sidebar (Sharing → Folio → Gearbox).

@@ -1,6 +1,6 @@
 // Gearbox — a gear shelf for Immich.
 // Sits in front of Immich (like Folio), groups your photos by camera body and lens,
-// and finds a product picture for each one on Wikipedia / Wikimedia Commons.
+// and finds a product picture for each one (Apotelyt, GSMArena, then Wikipedia / Commons).
 //
 //   /gearbox          the shelf page (uses your Immich login)
 //   /_gearbox/*       its files and API
@@ -16,6 +16,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gearForAsset, imageQuery, titleMatches, scoreTitle } from './lib/gear.mjs';
 import { createProxy } from './lib/proxy.mjs';
+import { createSources } from './lib/sources.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const bool = (v, fallback) => (v === undefined || v === '' ? fallback : !/^(0|false|no|off)$/i.test(v));
@@ -31,6 +32,10 @@ const INJECT = bool(process.env.GEARBOX_INJECT, true);
 const UA = `Gearbox-for-Immich/${VERSION} (self-hosted gear shelf for Immich)`;
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const COVERS_FILE = path.join(DATA_DIR, 'covers.json');
+const COVER_VERSION = 3; // bump to re-look-up every automatic picture after the sources change
+
+const sources = createSources({ dataDir: DATA_DIR, ua: UA });
+sources.warm().catch(() => {});
 
 const proxy = createProxy({
   immichUrl: IMMICH_URL,
@@ -92,8 +97,21 @@ const gearId = (kind, key) => kind[0] + createHash('sha1').update(key).digest('h
 
 async function runScan(user) {
   const groups = new Map();
+  const phoneName = await sources.phoneNames();
   let total = 0;
   let page = 1;
+  const add = (g, assetId) => {
+    const id = gearId(g.kind, g.key);
+    let entry = groups.get(id);
+    if (!entry) {
+      entry = { id, ...g, count: 0, assets: [], brandVotes: {}, builtin: {} };
+      groups.set(id, entry);
+    }
+    entry.count++;
+    entry.assets.push(assetId);
+    if (g.bodyBrand) entry.brandVotes[g.bodyBrand] = (entry.brandVotes[g.bodyBrand] || 0) + 1;
+    return entry;
+  };
   while (page) {
     const { assets } = await immich('/search/metadata', user.auth, {
       method: 'POST',
@@ -101,17 +119,11 @@ async function runScan(user) {
     });
     for (const a of assets.items) {
       total++;
-      for (const g of gearForAsset(a.exifInfo || {})) {
-        const id = gearId(g.kind, g.key);
-        let entry = groups.get(id);
-        if (!entry) {
-          entry = { id, ...g, count: 0, assets: [], brandVotes: {} };
-          groups.set(id, entry);
-        }
-        entry.count++;
-        entry.assets.push(a.id);
-        if (g.bodyBrand) entry.brandVotes[g.bodyBrand] = (entry.brandVotes[g.bodyBrand] || 0) + 1;
-      }
+      const { body, lens, builtin } = gearForAsset(a.exifInfo || {}, phoneName);
+      const b = add(body, a.id);
+      if (lens) add(lens, a.id);
+      // Phones, drones, compacts: the lens lives on the camera's card, not as a lens of its own.
+      if (builtin) b.builtin[builtin] = (b.builtin[builtin] || 0) + 1;
     }
     page = assets.nextPage ? Number(assets.nextPage) : null;
   }
@@ -123,6 +135,7 @@ async function runScan(user) {
     }
     delete g.brandVotes;
     delete g.bodyBrand;
+    g.builtin = Object.entries(g.builtin).sort((a, b) => b[1] - a[1]).map(([name]) => name);
   }
   const scan = { at: Date.now(), total, groups };
   scans.set(user.id, scan);
@@ -197,6 +210,7 @@ async function commonsSearch(text, q) {
   });
   const candidates = (j.query?.pages || [])
     .filter((p) => p.imageinfo?.[0] && OK_MIME.test(p.imageinfo[0].mime) && titleMatches(p.title, q.required))
+    .filter((p) => !/(with|on|mounted|sample|taken|shot|photo|test)/i.test(p.title)) // the lens itself, not a camera wearing it
     .map((p) => ({ p, score: scoreTitle(p.title, q.tokens) - p.index * 0.01 }))
     .sort((a, b) => b.score - a.score);
   const best = candidates[0]?.p;
@@ -208,8 +222,15 @@ async function lookupCover(g) {
   const q = imageQuery(g);
   if (!q) return null;
   const steps = g.kind === 'body'
-    ? [() => wikipediaExact(q.text, q, true), () => wikipediaSearch(q), () => commonsSearch(q.text, q)]
-    : [() => wikipediaExact(q.text, q, false), () => commonsSearch(q.text, q), ...(q.fallback ? [() => commonsSearch(q.fallback, q)] : [])];
+    ? [
+        () => (g.type === 'phone' ? sources.phoneImage(g.name) : sources.cameraImage(g.name)).catch(() => null),
+        () => wikipediaExact(q.text, q, true), () => wikipediaSearch(q),
+        // no Commons search for cameras: it finds screenshots and sample photos more often than the camera
+      ]
+    : [
+        () => sources.lensImage(g.name, g.brand).catch(() => null),
+        () => wikipediaExact(q.text, q, false), () => commonsSearch(q.text, q), ...(q.fallback ? [() => commonsSearch(q.fallback, q)] : []),
+      ];
   for (const step of steps) {
     const hit = await step(); // network trouble throws, so we don't cache a "not found"
     if (hit) return hit;
@@ -231,11 +252,11 @@ async function coverFor(g, retry = false) {
   if (g.unknown) return { url: null, unknown: true };
   const k = coverKey(g);
   const cached = covers[k];
-  if (cached && (!retry || cached.manual)) return cached;
+  if (cached && (cached.manual || (!retry && cached.v === COVER_VERSION))) return cached;
   if (!inflight.has(k)) {
     inflight.set(k, limited(async () => {
       const hit = await lookupCover(g);
-      covers[k] = { ...(hit || { url: null }), at: Date.now() };
+      covers[k] = { ...(hit || { url: null }), v: COVER_VERSION, at: Date.now() };
       saveCovers();
       return covers[k];
     }).catch((e) => {
@@ -262,9 +283,16 @@ async function readJson(req) {
   try { return s ? JSON.parse(s) : {}; } catch { throw httpError(400, 'Invalid JSON'); }
 }
 
+function knownCover(g) {
+  if (g.unknown) return { url: null, unknown: true };
+  const c = covers[coverKey(g)];
+  return c && (c.manual || c.v === COVER_VERSION) ? c : null;
+}
+
 const publicGear = (g) => ({
   id: g.id, kind: g.kind, name: g.name, brand: g.brand, count: g.count, unknown: !!g.unknown,
-  raw: g.raw, cover: g.unknown ? { url: null, unknown: true } : covers[coverKey(g)] ?? null,
+  type: g.type, typeLabel: g.typeLabel, code: g.code, builtin: g.builtin,
+  raw: g.raw, cover: knownCover(g),
 });
 
 async function findGear(user, id) {

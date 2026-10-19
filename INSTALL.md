@@ -58,8 +58,8 @@ docker compose up -d --build
   Using a domain? Point your reverse proxy at `immich_gearbox:2285` instead of `immich-server:2283`.
 
 You'll see normal Immich with a new **Gearbox** item in the sidebar. Click it.
-The first visit reads your whole library, so give it a few seconds; pictures of your
-gear then pop in one by one.
+The first visit reads your whole library and downloads the picture indexes, so give it
+half a minute; pictures of your gear then pop in one by one.
 
 ## Something wrong?
 
@@ -69,7 +69,8 @@ gear then pop in one by one.
 | "Gearbox could not reach Immich" | Check that `IMMICH_URL` matches your Immich container name (usually `immich-server`) |
 | Folio shows that error after step 2 | Folio's `IMMICH_URL` must be `http://immich_gearbox:2285`, and Gearbox must be running |
 | A body or lens has the wrong picture | Open it and use **Change picture** (paste any image link) or **Use "?"** |
-| Gear pictures never load | The server needs internet access to reach wikipedia.org and wikimedia.org |
+| Gear pictures never load | The server needs internet access to apotelyt.com, gsmarena.com, storage.googleapis.com and wikipedia.org |
+| First visit is slow | The first start downloads the picture indexes (~20 MB); after that it's quick |
 | Want to update Gearbox | Run `git -C gearbox pull`, then `docker compose up -d --build` again |
 
 Picked and found pictures are saved in the `gearbox-data` folder.
