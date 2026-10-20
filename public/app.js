@@ -27,6 +27,8 @@ function paintCover(el, gear) {
   if (gear.cover?.url) {
     const img = new Image();
     img.alt = gear.name;
+    // Studio shots and photos fill the card; small phone renders sit centred on white.
+    img.className = gear.cover.source === 'GSMArena' ? 'fit' : 'fill';
     img.loading = 'lazy';
     img.referrerPolicy = 'no-referrer';
     img.src = gear.cover.url;
@@ -80,7 +82,7 @@ function card(gear) {
   const sub = gear.unknown
     ? (gear.kind === 'lens' ? 'no lens info (0.0mm f/0 and friends)' : 'no camera info, or just a brand')
     : gear.kind === 'body' ? [gear.code, gear.typeLabel].filter(Boolean).join(' · ')
-    : gear.brand && !gear.name.toLowerCase().includes(gear.brand.toLowerCase()) ? `on ${gear.brand} bodies` : '';
+    : gear.brand && !gear.name.toLowerCase().includes(gear.brand.toLowerCase()) ? (gear.brandFromBody ? `on ${gear.brand} bodies` : gear.brand) : '';
   btn.querySelector('.sub').textContent = sub;
   btn.querySelector('.sub').hidden = !sub;
   btn.addEventListener('click', () => openDetail(gear));
@@ -138,7 +140,7 @@ function fillDetail(gear) {
   $('#dName').textContent = gear.name;
   $('#dCount').textContent = plural(gear.count, 'photo')
     + (gear.code ? ` · model ${gear.code}` : '')
-    + (gear.brand && gear.kind === 'lens' ? ` · used on ${gear.brand}` : '');
+    + (gear.kind === 'lens' && gear.brand ? (gear.brandFromBody ? ` · used on ${gear.brand} bodies` : ` · ${gear.brand}`) : '');
   $('#dBuiltin').textContent = gear.builtin?.length ? `Built-in lens: ${gear.builtin.join(', ')}` : '';
   $('#dBuiltin').hidden = !gear.builtin?.length;
   paintCover($('#dCover'), gear);
@@ -154,11 +156,14 @@ function fillDetail(gear) {
     src.append('Picture: ');
     const a = Object.assign(document.createElement('a'), { href: gear.cover.page || gear.cover.url, target: '_blank', rel: 'noopener', textContent: gear.cover.source || 'source' });
     src.append(a);
+    if (gear.cover.guess) src.append(' · best guess (the lens name has no model details)');
   }
 
   const searchable = !gear.unknown && gear.raw;
   $('#dSearch').hidden = !searchable;
-  if (searchable) $('#dSearch').href = `/search?query=${encodeURIComponent(JSON.stringify(gear.raw))}`;
+  // model only: one card can cover several spellings of the maker's name
+  const query = gear.kind === 'body' ? { model: gear.raw?.model } : { lensModel: gear.raw?.lensModel };
+  if (searchable) $('#dSearch').href = `/search?query=${encodeURIComponent(JSON.stringify(query))}`;
   for (const id of ['#dPick', '#dRetry', '#dQuestion']) $(id).hidden = gear.unknown;
 }
 

@@ -1,6 +1,6 @@
 {
   "name": "gearbox-for-immich",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "A shelf of every camera body and lens in your Immich library.",
   "type": "module",
   "license": "GPL-3.0-or-later",

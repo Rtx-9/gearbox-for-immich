@@ -14,7 +14,7 @@ import { readFile, writeFile, mkdir, rename } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { gearForAsset, imageQuery, titleMatches, scoreTitle } from './lib/gear.mjs';
+import { gearForAsset, imageQuery, titleMatches } from './lib/gear.mjs';
 import { createProxy } from './lib/proxy.mjs';
 import { createSources, Unavailable } from './lib/sources.mjs';
 
@@ -32,7 +32,7 @@ const INJECT = bool(process.env.GEARBOX_INJECT, true);
 const UA = `Gearbox-for-Immich/${VERSION} (self-hosted gear shelf for Immich)`;
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const COVERS_FILE = path.join(DATA_DIR, 'covers.json');
-const COVER_VERSION = 4; // bump to re-look-up every automatic picture after the sources change
+const COVER_VERSION = 5; // bump to re-look-up every automatic picture after the sources change
 
 const sources = createSources({ dataDir: DATA_DIR, ua: UA });
 sources.warm().catch(() => {});
@@ -132,6 +132,7 @@ async function runScan(user) {
     if (g.kind === 'lens' && !g.brand) {
       const best = Object.entries(g.brandVotes).sort((a, b) => b[1] - a[1])[0];
       g.brand = best ? best[0] : '';
+      g.brandFromBody = !!best;
     }
     delete g.brandVotes;
     delete g.bodyBrand;
@@ -180,16 +181,15 @@ async function wiki(host, params) {
 }
 
 const pageUrl = (host, title) => `https://${host}/wiki/${encodeURIComponent(title.replace(/ /g, '_'))}`;
-const OK_MIME = /^image\/(jpeg|png|webp)$/;
 
 // Wikipedia article by exact title (follows redirects, e.g. "Sony ILCE-7M3" → "Sony α7 III").
-async function wikipediaExact(title, q, trust) {
+async function wikipediaExact(title, q) {
   const j = await wiki('en.wikipedia.org', {
     action: 'query', titles: title, redirects: '1', prop: 'pageimages', piprop: 'thumbnail', pithumbsize: '600',
   });
   const p = j.query?.pages?.[0];
   if (!p || p.missing || !p.thumbnail) return null;
-  if (!trust && !titleMatches(p.title, q.required)) return null;
+  if (!titleMatches(p.title, q.required)) return null;
   return { url: p.thumbnail.source, page: pageUrl('en.wikipedia.org', p.title), source: 'Wikipedia' };
 }
 
@@ -203,21 +203,6 @@ async function wikipediaSearch(q) {
   return p ? { url: p.thumbnail.source, page: pageUrl('en.wikipedia.org', p.title), source: 'Wikipedia' } : null;
 }
 
-async function commonsSearch(text, q) {
-  const j = await wiki('commons.wikimedia.org', {
-    action: 'query', generator: 'search', gsrnamespace: '6', gsrsearch: text, gsrlimit: '20',
-    prop: 'imageinfo', iiprop: 'url|mime', iiurlwidth: '600',
-  });
-  const candidates = (j.query?.pages || [])
-    .filter((p) => p.imageinfo?.[0] && OK_MIME.test(p.imageinfo[0].mime) && titleMatches(p.title, q.required))
-    .filter((p) => !/(with|on|mounted|sample|taken|shot|photo|test)/i.test(p.title)) // the lens itself, not a camera wearing it
-    .map((p) => ({ p, score: scoreTitle(p.title, q.tokens) - p.index * 0.01 }))
-    .sort((a, b) => b.score - a.score);
-  const best = candidates[0]?.p;
-  if (!best) return null;
-  return { url: best.imageinfo[0].thumburl || best.imageinfo[0].url, page: best.imageinfo[0].descriptionurl, source: 'Wikimedia Commons' };
-}
-
 // Tries each source in turn. `incomplete` means a source couldn't be reached, so a miss
 // shouldn't be remembered for long.
 async function lookupCover(g) {
@@ -225,14 +210,17 @@ async function lookupCover(g) {
   if (!q) return { hit: null };
   const steps = g.kind === 'body'
     ? [
-        ...(g.type === 'phone' ? [() => sources.phoneImage(g.name)] : [() => sources.cameraImage(g.name)]),
+        ...(g.type === 'phone' ? [() => sources.phoneImage(g.name, g.code)] : [() => sources.cameraImage(g.name)]),
         ...(g.type !== 'phone' ? [() => sources.kamerastoreBody(g)] : []),
-        () => wikipediaExact(q.text, q, true), () => wikipediaSearch(q),
-        // no Commons search for cameras: it finds screenshots and sample photos more often than the camera
+        // The article's title must carry the model number: "Huawei Honor 6A" redirects to the
+        // Honor company page, whose picture is an office building.
+        () => wikipediaExact(q.text, q), () => wikipediaSearch(q),
       ]
     : [
         () => sources.lensImage(g.name, g.brand), () => sources.kamerastoreLens(g.name, g.brand),
-        () => wikipediaExact(q.text, q, false), () => commonsSearch(q.text, q), ...(q.fallback ? [() => commonsSearch(q.fallback, q)] : []),
+        () => wikipediaExact(q.text, q),
+        // No Commons search: it finds sample photos and cameras wearing some other lens more
+        // often than the lens itself. A "?" is better than a wrong picture.
       ];
   let incomplete = false;
   for (const step of steps) {
@@ -301,7 +289,7 @@ function knownCover(g) {
 
 const publicGear = (g) => ({
   id: g.id, kind: g.kind, name: g.name, brand: g.brand, count: g.count, unknown: !!g.unknown,
-  type: g.type, typeLabel: g.typeLabel, code: g.code, builtin: g.builtin,
+  type: g.type, typeLabel: g.typeLabel, code: g.code, builtin: g.builtin, brandFromBody: !!g.brandFromBody,
   raw: g.raw, cover: knownCover(g),
 });
 
@@ -351,7 +339,7 @@ async function api(req, res, parts, url) {
     ];
     const row = (g) => {
       const c = knownCover(g);
-      const pic = g.unknown ? '?' : !c ? 'not looked up yet' : c.url ? `${c.source}${c.manual ? ' (picked)' : ''}` : c.retryAt ? 'none yet (a source was down, will retry)' : 'none found';
+      const pic = g.unknown ? '?' : !c ? 'not looked up yet' : c.url ? `${c.source}${c.manual ? ' (picked)' : c.guess ? ' (best guess: the lens name has no model details)' : ''}` : c.retryAt ? 'none yet (a source was down, will retry)' : 'none found';
       const raw = g.kind === 'body' ? `make=${JSON.stringify(g.raw?.make ?? null)} model=${JSON.stringify(g.raw?.model ?? null)}` : `lens=${JSON.stringify(g.raw?.lensModel ?? null)}`;
       return [`  ${g.name} (${g.count})`, g.unknown ? '' : raw, g.typeLabel || '', g.builtin?.length ? `built-in: ${g.builtin.join(' / ')}` : '', `picture: ${pic}`].filter(Boolean).join(' | ');
     };

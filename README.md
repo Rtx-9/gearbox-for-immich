@@ -17,6 +17,13 @@ as album-style cards with a product picture and a photo count, most used first.
   real names (`ILCE-7M3` → **Sony A7 III**, `DSC-RX100M7` → **Sony RX100 VII**).
 - Phones, drones, action cams and compacts keep their lens on the camera's card
   ("Built-in lens: iPhone 14 back dual wide camera 5.7mm f/1.5") instead of filling the lens shelf.
+- Lenses match on maker, focal range, aperture, mount **and version** (IS vs IS II, STM, Nano,
+  AF-S vs AF-P, VR…), so a lens never wears its successor's picture. Third-party lenses are
+  recognised by their designations ("Di VC USD" → Tamron, "DC OS HSM" → Sigma) even when EXIF
+  leaves the maker out. Names that are only numbers ("50mm f/1.8", common on Nikon) get a
+  picture marked **best guess**.
+- One card per camera even when the maker wrote its company name differently over the years;
+  `Z50_2` → **Nikon Z50 II**, `E-M1MarkII` → **Olympus E-M1 Mark II**.
 - Gear with no info — `0.0 mm f/0.0`, `----`, empty fields, or just a brand like `MINOLTA` —
   goes under **Unknown** with a big **?**. So does anything it can't find a picture for.
 - **Gear report** (top right) lists what EXIF said, what Gearbox made of it, where each picture
