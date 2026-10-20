@@ -21,6 +21,16 @@ const KIT = [
   [{ make: 'SONY', model: 'DSC-RX100M7' }, ['24-200mm F2.8-4.5'], 45],
   [{ make: 'RICOH IMAGING COMPANY, LTD.', model: 'PENTAX K-1' }, ['0.0 mm f/0.0'], 40],
   [{ make: 'MINOLTA', model: 'MINOLTA' }, ['MINOLTA'], 12],
+  [{ make: 'GoPro', model: 'HERO8 Black' }, [''], 35],
+  [{ make: 'DJI', model: 'FC3582' }, ['24.0 mm f/1.7'], 28],
+  [{ make: 'Hasselblad', model: 'L1D-20c' }, ['28.0 mm f/2.8'], 22],
+  [{ make: 'DJI', model: 'AC003' }, [''], 18],
+  [{ make: 'NIKON', model: 'COOLPIX P1000' }, ['4.3-539.0 mm f/2.8-8.0'], 25],
+  [{ make: 'Panasonic', model: 'DMC-TZ70' }, ['LUMIX DC VARIO 4.3-129 mm f/3.3-6.4'], 20],
+  [{ make: 'OLYMPUS CORPORATION', model: 'TG-5' }, ['4.5-18.0 mm f/2.0-4.9'], 15],
+  [{ make: 'Canon', model: 'Canon PowerShot G7 X Mark II' }, ['8.8-36.8 mm'], 14],
+  [{ make: 'FUJIFILM', model: 'FinePix F200EXR' }, [''], 10],
+  [{ make: 'Arashi Vision', model: 'Insta360 X3' }, [''], 9],
   [{}, [null], 30],
 ];
 

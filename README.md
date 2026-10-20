@@ -7,14 +7,20 @@ as album-style cards with a product picture and a photo count, most used first.
 - Product pictures come from:
   - **[Apotelyt](https://apotelyt.com)** — clean product shots of ~600 camera bodies and ~1,200 lenses
   - **[GSMArena](https://www.gsmarena.com)** — phones
-  - **Wikipedia** — everything else (drones, superzooms…), only when the article really is about that model
+  - **[Kamerastore](https://kamerastore.com)** — white-background photos of compacts, action cams, drones
+    and lenses (only listings whose model number, variant and mount all match)
+  - **Wikipedia** — everything else, only when the article really is about that model
 - Phone model codes become real names using Google Play's device list:
-  `21081111RG` → **Xiaomi 11T**, `SM-G991B` → **Samsung Galaxy S21 5G**. DJI drone codes too
-  (`FC7303` → **DJI Mini 2**).
+  `21081111RG` → **Xiaomi 11T**, `SM-G991B` → **Samsung Galaxy S21 5G**. DJI codes too, from
+  [Wikimedia Commons' table](https://commons.wikimedia.org/wiki/DJI_camera_model_names)
+  (`FC3582` → **DJI Mini 3 Pro**, `AC003` → **DJI Osmo Action 4**). Sony codes get their
+  real names (`ILCE-7M3` → **Sony A7 III**, `DSC-RX100M7` → **Sony RX100 VII**).
 - Phones, drones, action cams and compacts keep their lens on the camera's card
   ("Built-in lens: iPhone 14 back dual wide camera 5.7mm f/1.5") instead of filling the lens shelf.
 - Gear with no info — `0.0 mm f/0.0`, `----`, empty fields, or just a brand like `MINOLTA` —
   goes under **Unknown** with a big **?**. So does anything it can't find a picture for.
+- **Gear report** (top right) lists what EXIF said, what Gearbox made of it, where each picture
+  came from, and whether every source could be reached — paste it into an issue when something's off.
 - Click a card to see its photos, open them in Immich, swap the picture (paste any link,
   or force the ?), or **make a real Immich album** of everything shot with it.
 
@@ -40,7 +46,9 @@ no API key. Each person sees their own library. Found pictures are shared and re
 `/data/indexes` on first start and refreshed every two weeks, so each site is only asked a
 handful of times.
 
-DPReview would be the obvious picture source, but it blocks automated requests, so it isn't used.
+DPReview and B&H would be obvious picture sources, but both block automated requests, so they
+aren't used. If a source can't be reached, pictures it would have found are retried an hour later
+instead of being remembered as missing.
 
 Folio and Gearbox chain: Folio's `IMMICH_URL` points at Gearbox, Gearbox's points at Immich,
 and both add their link to the sidebar (Sharing → Folio → Gearbox).

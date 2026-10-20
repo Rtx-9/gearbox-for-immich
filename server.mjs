@@ -16,7 +16,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gearForAsset, imageQuery, titleMatches, scoreTitle } from './lib/gear.mjs';
 import { createProxy } from './lib/proxy.mjs';
-import { createSources } from './lib/sources.mjs';
+import { createSources, Unavailable } from './lib/sources.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const bool = (v, fallback) => (v === undefined || v === '' ? fallback : !/^(0|false|no|off)$/i.test(v));
@@ -32,7 +32,7 @@ const INJECT = bool(process.env.GEARBOX_INJECT, true);
 const UA = `Gearbox-for-Immich/${VERSION} (self-hosted gear shelf for Immich)`;
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const COVERS_FILE = path.join(DATA_DIR, 'covers.json');
-const COVER_VERSION = 3; // bump to re-look-up every automatic picture after the sources change
+const COVER_VERSION = 4; // bump to re-look-up every automatic picture after the sources change
 
 const sources = createSources({ dataDir: DATA_DIR, ua: UA });
 sources.warm().catch(() => {});
@@ -97,7 +97,7 @@ const gearId = (kind, key) => kind[0] + createHash('sha1').update(key).digest('h
 
 async function runScan(user) {
   const groups = new Map();
-  const phoneName = await sources.phoneNames();
+  const lookups = await sources.nameLookups();
   let total = 0;
   let page = 1;
   const add = (g, assetId) => {
@@ -119,7 +119,7 @@ async function runScan(user) {
     });
     for (const a of assets.items) {
       total++;
-      const { body, lens, builtin } = gearForAsset(a.exifInfo || {}, phoneName);
+      const { body, lens, builtin } = gearForAsset(a.exifInfo || {}, lookups);
       const b = add(body, a.id);
       if (lens) add(lens, a.id);
       // Phones, drones, compacts: the lens lives on the camera's card, not as a lens of its own.
@@ -218,24 +218,33 @@ async function commonsSearch(text, q) {
   return { url: best.imageinfo[0].thumburl || best.imageinfo[0].url, page: best.imageinfo[0].descriptionurl, source: 'Wikimedia Commons' };
 }
 
+// Tries each source in turn. `incomplete` means a source couldn't be reached, so a miss
+// shouldn't be remembered for long.
 async function lookupCover(g) {
   const q = imageQuery(g);
-  if (!q) return null;
+  if (!q) return { hit: null };
   const steps = g.kind === 'body'
     ? [
-        () => (g.type === 'phone' ? sources.phoneImage(g.name) : sources.cameraImage(g.name)).catch(() => null),
+        ...(g.type === 'phone' ? [() => sources.phoneImage(g.name)] : [() => sources.cameraImage(g.name)]),
+        ...(g.type !== 'phone' ? [() => sources.kamerastoreBody(g)] : []),
         () => wikipediaExact(q.text, q, true), () => wikipediaSearch(q),
         // no Commons search for cameras: it finds screenshots and sample photos more often than the camera
       ]
     : [
-        () => sources.lensImage(g.name, g.brand).catch(() => null),
+        () => sources.lensImage(g.name, g.brand), () => sources.kamerastoreLens(g.name, g.brand),
         () => wikipediaExact(q.text, q, false), () => commonsSearch(q.text, q), ...(q.fallback ? [() => commonsSearch(q.fallback, q)] : []),
       ];
+  let incomplete = false;
   for (const step of steps) {
-    const hit = await step(); // network trouble throws, so we don't cache a "not found"
-    if (hit) return hit;
+    try {
+      const hit = await step();
+      if (hit) return { hit };
+    } catch (e) {
+      incomplete = true;
+      if (!(e instanceof Unavailable)) console.warn(`[gearbox] picture source failed for ${g.name}: ${e.message}`);
+    }
   }
-  return null;
+  return { hit: null, incomplete };
 }
 
 // Max 2 Wikimedia lookups at once; dedupe concurrent requests for the same gear.
@@ -252,16 +261,13 @@ async function coverFor(g, retry = false) {
   if (g.unknown) return { url: null, unknown: true };
   const k = coverKey(g);
   const cached = covers[k];
-  if (cached && (cached.manual || (!retry && cached.v === COVER_VERSION))) return cached;
+  if (cached && (cached.manual || (!retry && fresh(cached)))) return cached;
   if (!inflight.has(k)) {
     inflight.set(k, limited(async () => {
-      const hit = await lookupCover(g);
-      covers[k] = { ...(hit || { url: null }), v: COVER_VERSION, at: Date.now() };
+      const { hit, incomplete } = await lookupCover(g);
+      covers[k] = { ...(hit || { url: null }), v: COVER_VERSION, at: Date.now(), ...(incomplete && !hit ? { retryAt: Date.now() + 3600_000 } : {}) };
       saveCovers();
       return covers[k];
-    }).catch((e) => {
-      console.warn(`[gearbox] picture lookup failed for ${g.name}: ${e.message}`);
-      throw httpError(502, 'Picture lookup failed (no internet?)');
     }).finally(() => inflight.delete(k)));
   }
   return inflight.get(k);
@@ -283,10 +289,14 @@ async function readJson(req) {
   try { return s ? JSON.parse(s) : {}; } catch { throw httpError(400, 'Invalid JSON'); }
 }
 
+// A remembered picture is good unless it's from an older Gearbox, or a "not found" from a
+// time when a source was down.
+const fresh = (c) => c.v === COVER_VERSION && !(c.retryAt && c.retryAt < Date.now());
+
 function knownCover(g) {
   if (g.unknown) return { url: null, unknown: true };
   const c = covers[coverKey(g)];
-  return c && (c.manual || c.v === COVER_VERSION) ? c : null;
+  return c && (c.manual || fresh(c)) ? c : null;
 }
 
 const publicGear = (g) => ({
@@ -327,6 +337,27 @@ async function api(req, res, parts, url) {
       bodies: all.filter((g) => g.kind === 'body'),
       lenses: all.filter((g) => g.kind === 'lens'),
     });
+  }
+
+  // GET /_gearbox/api/report — plain text: what Gearbox read from EXIF and where each picture came from
+  if (req.method === 'GET' && parts[0] === 'report') {
+    const s = await getScan(user);
+    const ago = (t) => (t ? `${Math.round((Date.now() - t) / 3600_000)}h old` : '');
+    const lines = [
+      `Gearbox ${VERSION} · ${s.total} photos · scanned ${new Date(s.at).toISOString()}`,
+      '',
+      'Sources:',
+      ...sources.status().map((x) => `  ${x.name.padEnd(9)} ${x.ok ? `ok, ${x.size} entries, ${ago(x.at)}` : x.loading ? 'downloading…' : `NOT AVAILABLE${x.error ? ` (${x.error})` : ''}`}`),
+    ];
+    const row = (g) => {
+      const c = knownCover(g);
+      const pic = g.unknown ? '?' : !c ? 'not looked up yet' : c.url ? `${c.source}${c.manual ? ' (picked)' : ''}` : c.retryAt ? 'none yet (a source was down, will retry)' : 'none found';
+      const raw = g.kind === 'body' ? `make=${JSON.stringify(g.raw?.make ?? null)} model=${JSON.stringify(g.raw?.model ?? null)}` : `lens=${JSON.stringify(g.raw?.lensModel ?? null)}`;
+      return [`  ${g.name} (${g.count})`, g.unknown ? '' : raw, g.typeLabel || '', g.builtin?.length ? `built-in: ${g.builtin.join(' / ')}` : '', `picture: ${pic}`].filter(Boolean).join(' | ');
+    };
+    const all = [...s.groups.values()].sort((a, b) => b.count - a.count);
+    lines.push('', 'Bodies:', ...all.filter((g) => g.kind === 'body').map(row), '', 'Lenses:', ...all.filter((g) => g.kind === 'lens').map(row));
+    return send(res, 200, lines.join('\n'), { 'content-type': 'text/plain; charset=utf-8' });
   }
 
   // GET /_gearbox/api/gear/:id/assets?offset=&limit=
